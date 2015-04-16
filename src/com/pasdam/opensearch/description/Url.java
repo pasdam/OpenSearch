@@ -1,7 +1,10 @@
 package com.pasdam.opensearch.description;
 
+import java.security.InvalidParameterException;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -15,8 +18,6 @@ import org.w3c.dom.NodeList;
  */
 public class Url {
 	
-	public static final String ELEMENT_NAME = "Url";
-
 	public static final String ATTR_PARAMETERS_ENCTYPE = "parameters:enctype";
 
 	public static final String ATTR_PARAMETERS_METHOD = "parameters:method";
@@ -30,11 +31,15 @@ public class Url {
 	public static final String ATTR_TYPE = "type";
 
 	public static final String ATTR_TEMPLATE = "template";
+	
+	private static final Pattern PATTERN_REL_SEPARATOR = Pattern.compile(" ");
+	private static final Pattern PATTERN_QUERY_STRING_SEPARATOR = Pattern.compile("\\?");
+	private static final Pattern PATTERN_QUERY_STRING_PARAMETERS_SEPARATOR = Pattern.compile("&");
 
 	/**
 	 * The tag name of this element
 	 */
-	public static final String TAG_NAME = ELEMENT_NAME;
+	public static final String TAG_NAME = "Url";
 	
 	/**
 	 * The URL template to be processed according to the OpenSearch URL template syntax
@@ -52,7 +57,7 @@ public class Url {
 	 * The role of the resource being described in relation to the description document.<br/>
 	 * Possible values: REL_RESULTS (default), REL_SUGGESTIONS, REL_SELF, REL_COLLECTION.
 	 */
-	public String rel;
+	public List<UrlRole> rel;
 	
 	/**
 	 * The index number of the first search result
@@ -89,7 +94,7 @@ public class Url {
 	/**
 	 * List of query url's parameters
 	 */
-	public ArrayList<Parameter> parameters = new ArrayList<Parameter>();
+	public List<Parameter> parameters = new ArrayList<Parameter>();
 	
 	/**
 	 * This method parse an xml Url element to create an object of this class
@@ -100,33 +105,77 @@ public class Url {
 	public static Url parse(Node urlNode) throws ParseException{
 		Url url = new Url();
 		NamedNodeMap attributes = urlNode.getAttributes();
+		
 		try {
-			url.template = attributes.getNamedItem(ATTR_TEMPLATE).getNodeValue().trim();
-			parseTemplate(url.template, url.parameters);
+			String[] templateParts = PATTERN_QUERY_STRING_SEPARATOR.split(attributes.getNamedItem(ATTR_TEMPLATE).getNodeValue().trim());
+			url.template = templateParts[0];
+			if (templateParts.length > 1) {
+				url.parameters = parseQueryString(templateParts[1]);
+			}
 		} catch (Exception e) {
+			e.printStackTrace();
 			throw new ParseException("Invalid attribute \"" + ATTR_TEMPLATE + "\"!", 0);
 		}
+		
 		try {
 			url.type = attributes.getNamedItem(ATTR_TYPE).getNodeValue().trim();
 		} catch (Exception e) {}
 		if (url.type != null && !url.type.matches("^[-\\w]+/[-\\w\\+]+$")) {
 			throw new ParseException("Invalid attribute \"" + ATTR_TYPE + "\"!", 0);
 		}
-		try {
-			url.rel = attributes.getNamedItem(ATTR_REL).getNodeValue().trim();
-		} catch (Exception e1) {
-			throw new ParseException("Invalid attribute \"" + ATTR_REL + "\"!", 0);
+			
+		Node attribute = attributes.getNamedItem(ATTR_REL);
+		url.rel = new ArrayList<UrlRole>();
+		if (attribute != null) {
+			
+			String relText = attribute.getNodeValue();
+			if (relText != null) {
+				
+				relText = relText.trim();
+				if (relText.length() > 0) {
+			
+					String[] relValues = PATTERN_REL_SEPARATOR.split(relText);
+					for (String relValue : relValues) {
+						try {
+							url.rel.add(UrlRole.fromString(relValue));
+						} catch (InvalidParameterException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
 		}
-		try {
-			url.indexOffset = Integer.parseInt(attributes.getNamedItem(ATTR_INDEX_OFFSET).getNodeValue().trim());
-		} catch (Exception e) {
+		
+		if (url.rel.size() == 0) {
+			url.rel.add(UrlRole.RESULTS); // default value
+		}
+		
+		attribute = attributes.getNamedItem(ATTR_INDEX_OFFSET);
+		if (attribute != null) {
+			try {
+				url.indexOffset = Integer.parseInt(attribute.getNodeValue().trim());
+			} catch (Exception e) {
+				e.printStackTrace();
+				url.indexOffset = 1;
+			}
+		} else {
 			url.indexOffset = 1;
 		}
-		try {
-			url.pageOffset = Integer.parseInt(attributes.getNamedItem(ATTR_PAGE_OFFSET).getNodeValue().trim());
-		} catch (Exception e) {
+		
+		attribute = attributes.getNamedItem(ATTR_PAGE_OFFSET);
+		if (attribute != null) {
+			try {
+				url.pageOffset = Integer.parseInt(attribute.getNodeValue().trim());
+				
+			} catch (Exception e) {
+				url.pageOffset = 1;
+				e.printStackTrace();
+			}
+			
+		} else {
 			url.pageOffset = 1;
 		}
+			
 		try {
 			url.method = attributes.getNamedItem(ATTR_PARAMETERS_METHOD).getNodeValue().trim();
 			if (!url.method.equalsIgnoreCase("get") || !url.method.equalsIgnoreCase("post")) {
@@ -135,6 +184,7 @@ public class Url {
 		} catch (Exception e) {
 			url.method = "get";
 		}
+		
 		try {
 			url.enctype = attributes.getNamedItem(ATTR_PARAMETERS_ENCTYPE).getNodeValue().trim();
 		} catch (Exception e) {
@@ -143,15 +193,33 @@ public class Url {
 		if (!url.enctype.matches("^[-\\w]+/[-\\w\\+]+$")) {
 			throw new ParseException("Invalid attribute \"" + ATTR_PARAMETERS_ENCTYPE + "\"!", 0);
 		}
+		
 		NodeList parameters = urlNode.getChildNodes();
 		for (int i = 0; i < parameters.getLength(); i++) {
 			try {
 				if (parameters.item(i).getNodeName().equals(Parameter.TAG_NAME)) {
 					url.parameters.add(Parameter.parse(parameters.item(i)));
 				}
-			} catch (Exception e) {}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 		return url;
+	}
+	
+	/**
+	 * This method parses a query string and extracts all parameters from it
+	 * 
+	 * @param queryString query string to parse
+	 * @return a list of all query parameters
+	 */
+	public static List<Parameter> parseQueryString(String queryString) {
+		String[] queryParts = PATTERN_QUERY_STRING_PARAMETERS_SEPARATOR.split(queryString);
+		List<Parameter> parameters = new ArrayList<Parameter>(queryParts.length);
+		for (String part: queryParts) {
+			parameters.add(Parameter.parse(part));
+		}
+		return parameters;
 	}
 	
 	/**
@@ -159,41 +227,16 @@ public class Url {
 	 */
 	public String getUrl() throws IllegalStateException {
 		String url = this.template;
-		if (this.parameters.size()>0) {
-			Parameter currentParam = null;
-			String queryString = "";
-			for (int i = 0; i < this.parameters.size(); i++) {
-				currentParam = this.parameters.get(i);
-				if (currentParam.valueType != null) {
-					if (currentParam.hasOwnTag) {
-						if (currentParam.equals("")) {
-							if (currentParam.minimum > 0) {
-								// error
-								throw new IllegalStateException("Please set all parameter. Invalid value of parameter: " + currentParam.valueType.toString());
-							}
-						} else {
-							for (int j = currentParam.minimum; j <= currentParam.maximum; j++) {
-								// insert
-								queryString += "&" + currentParam.name + "="
-										+ currentParam.value;
-							}
-						}
-					} else {
-						// substitute
-						url = url.replaceAll(TemplateParameter
-								.toString(currentParam.valueType),
-								currentParam.value);
-					}
-				} else if (currentParam.hasOwnTag) {
-					for (int j = currentParam.minimum; j <= currentParam.maximum; j++) {
-						// insert
-						queryString += "&" + currentParam.name + "="
-								+ currentParam.value;
-					}
+		if (this.parameters.size() > 0) {
+			StringBuilder queryString = new StringBuilder();
+			for (Parameter currentParam : this.parameters) {
+				for (int j = currentParam.minimum; j <= currentParam.maximum; j++) {
+					// insert
+					queryString.append("&" + currentParam.encodeAsQueryStringElement());
 				}
 			}
 			if (queryString.length() > 1) {
-				url = url + "?" + queryString.substring(1);
+				url = url + "?" + queryString.substring(1); // ignore the first "&"
 			}
 		} 
 		return url;
@@ -222,47 +265,8 @@ public class Url {
 		for (int i = 0; i < this.parameters.size(); i++) {
 			currentParameter = this.parameters.get(i);
 			if (currentParameter.valueType == parameterType) {
-				currentParameter.value = TemplateParameter.toString(currentParameter.valueType);
+				currentParameter.value = value;
 			}
-		}
-	}
-	
-	/**
-	 * This method parse the template to find possible parameters
-	 * @param template - the template to parse
-	 * @param parameterList - ArrayList containing all parameters
-	 */
-	public static void parseTemplate(String template, ArrayList<Parameter> parameterList) {
-		if (template.contains(TemplateParameter.PARAM_SEARCH_TERMS)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_SEARCH_TERMS, false));
-		} else if (template.contains(TemplateParameter.PARAM_COUNT)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_COUNT, false));
-		} else if (template.contains(TemplateParameter.PARAM_START_INDEX)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_START_INDEX, false));
-		} else if (template.contains(TemplateParameter.PARAM_START_PAGE)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_START_PAGE, false));
-		} else if (template.contains(TemplateParameter.PARAM_LANGUAGE)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_LANGUAGE, false));
-		} else if (template.contains(TemplateParameter.PARAM_INPUT_ENCODING)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_INPUT_ENCODING, false));
-		} else if (template.contains(TemplateParameter.PARAM_OUTPUT_ENCODING)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_OUTPUT_ENCODING, false));
-		} else if (template.contains(TemplateParameter.PARAM_TIME_START)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_TIME_START, false));
-		} else if (template.contains(TemplateParameter.PARAM_TIME_END)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_TIME_END, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_NAME) || template.contains(TemplateParameter.PARAM_GEO_LOCATION_STRING)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_NAME, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_LAT)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_LAT, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_LON)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_LON, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_RADIUS)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_RADIUS, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_BOX)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_BOX, false));
-		} else if (template.contains(TemplateParameter.PARAM_GEO_GEOMETRY) || template.contains(TemplateParameter.PARAM_GEO_POLYGON)) {
-			parameterList.add(new Parameter(null, TemplateParameter.PARAM_GEO_GEOMETRY, false));
 		}
 	}
 	
@@ -273,10 +277,16 @@ public class Url {
 	@Override
 	public String toString() {
 		StringBuilder tag = new StringBuilder();
-		tag.append("<" + ELEMENT_NAME + " ");
+		tag.append("<" + TAG_NAME + " ");
 		tag.append("template");tag.append("=\"");tag.append(template);tag.append("\" ");
 		tag.append(ATTR_TYPE);tag.append("=\"");tag.append(type);tag.append("\" ");
-		tag.append(ATTR_REL);tag.append("=\"");tag.append(rel);tag.append("\" ");
+		
+		tag.append(ATTR_REL);tag.append("=\"");tag.append(rel.get(0).toString());
+		for (int i = 1; i < rel.size(); i++) {
+			tag.append(" " + rel.get(i).toString());
+		}
+		tag.append("\" ");
+		
 		tag.append(ATTR_INDEX_OFFSET);tag.append("=\"");tag.append(indexOffset);tag.append("\" ");
 		tag.append(ATTR_PAGE_OFFSET);tag.append("=\"");tag.append(pageOffset);tag.append("\" ");
 		tag.append(ATTR_PARAMETERS_METHOD);tag.append("=\"");tag.append(method);tag.append("\" ");
@@ -286,10 +296,23 @@ public class Url {
 			for (int i = 0; i < parameters.size(); i++) {
 				tag.append("\n\t");tag.append(parameters.get(i).toString());
 			}
-			tag.append("\n\t</" + ELEMENT_NAME + ">");
+			tag.append("\n\t</" + TAG_NAME + ">");
 		} else {
 			tag.append(" />");
 		}
 		return tag.toString();
+	}
+	
+	public static String toStringTemplate(Url url) {
+		if (url != null) {
+			StringBuilder builder = new StringBuilder(url.template);
+			if (!url.template.contains("?")) {
+				builder.append("?");
+			}
+			for (Parameter parameter : url.parameters) {
+				builder.append("&" + parameter.name + "=" + parameter.value);
+			}
+		}
+		return null;
 	}
 }

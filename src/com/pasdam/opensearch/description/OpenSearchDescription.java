@@ -1,6 +1,7 @@
 package com.pasdam.opensearch.description;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
@@ -10,10 +11,12 @@ import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 /**
  * The root node of the OpenSearch description document.
@@ -29,9 +32,6 @@ public class OpenSearchDescription {
 	public static final String CHILD_SYNDICATION_RIGHT = "SyndicationRight";
 	public static final String CHILD_ATTRIBUTION = "Attribution";
 	public static final String CHILD_DEVELOPER = "Developer";
-	public static final String CHILD_QUERY = Query.TAG_NAME;
-	public static final String CHILD_IMAGE = Image.TAG_NAME;
-	public static final String CHILD_URL = Url.TAG_NAME;
 	public static final String CHILD_LONG_NAME = "LongName";
 	public static final String CHILD_TAGS = "Tags";
 	public static final String CHILD_CONTACT = "Contact";
@@ -213,16 +213,16 @@ public class OpenSearchDescription {
 	 * Parse the content of the given URL as an XML document and return a new OpenSearchDescription object.
 	 * @param xml - the string containing xml source
 	 * @return a new OpenSearchDescription object or null in case of errors
+	 * @throws ParserConfigurationException - if a DocumentBuilder cannot be created which satisfies the configuration requested.
+	 * @throws IOException - If any IO errors occur.
+	 * @throws SAXException - If any parse errors occur.
+	 * @throws ParseException - If input document isn't valid
 	 */
-	public static OpenSearchDescription parse(String xml){
-		try {
-			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-			DocumentBuilder db = dbf.newDocumentBuilder();
-			// parsing input document
-			return parse(db.parse(new InputSource(new StringReader(xml))));
-		} catch (Exception e) {
-			return null;
-		}
+	public static OpenSearchDescription parse(String xml) throws ParserConfigurationException, ParseException, SAXException, IOException{
+		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+		DocumentBuilder db = dbf.newDocumentBuilder();
+		// parsing input document
+		return parse(db.parse(new InputSource(new StringReader(xml))));
 	}
 	
 	/**
@@ -237,6 +237,7 @@ public class OpenSearchDescription {
 			// parsing input document
 			return parse(db.parse(file));
 		} catch (Exception e) {
+			e.printStackTrace();
 			return null;
 		}
 	}
@@ -280,16 +281,18 @@ public class OpenSearchDescription {
 		} else {
 			throw new ParseException("Element \"" + CHILD_DESCRIPTION + "\" not found!", 0);
 		}
-		currentElements = document.getElementsByTagName(CHILD_URL);
+		currentElements = document.getElementsByTagName(Url.TAG_NAME);
 		if (currentElements != null) {
-			openSearchObject.urls = new ArrayList<Url>();
+			openSearchObject.urls = new ArrayList<Url>(currentElements.getLength());
 			for (int i = 0; i < currentElements.getLength(); i++) {
 				try {
 					openSearchObject.urls.add(Url.parse(currentElements.item(i)));
-				} catch (Exception e) {}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
 			}
 		} else {
-			throw new ParseException("Element \"" + CHILD_URL + "\" not found!", 0);
+			throw new ParseException("Element \"" + Url.TAG_NAME + "\" not found!", 0);
 		}
 		// parsing optional elements
 		currentElements = document.getElementsByTagName(CHILD_CONTACT);
@@ -306,7 +309,7 @@ public class OpenSearchDescription {
 		} catch (Exception e) {
 			openSearchObject.longName = openSearchObject.shortName;
 		}
-		currentElements = document.getElementsByTagName(CHILD_IMAGE);
+		currentElements = document.getElementsByTagName(Image.TAG_NAME);
 		if (currentElements != null) {
 			openSearchObject.images = new ArrayList<Image>();
 			for (int i = 0; i < currentElements.getLength(); i++) {
@@ -315,7 +318,7 @@ public class OpenSearchDescription {
 				} catch (Exception e) {}
 			}
 		}
-		currentElements = document.getElementsByTagName(CHILD_QUERY);
+		currentElements = document.getElementsByTagName(Query.TAG_NAME);
 		openSearchObject.queries = new ArrayList<Query>();
 		for (int i = 0; i < currentElements.getLength(); i++) {
 			try {

@@ -127,7 +127,15 @@ public enum TemplateParameter {
 	public static final String PARAM_LANGUAGE = "{language}";
 	public static final String PARAM_START_PAGE = "{startPage}";
 	public static final String PARAM_START_INDEX = "{startIndex}";
+	
+	/**
+	 * Number of search results per page desired by the search client
+	 */
 	public static final String PARAM_COUNT = "{count}";
+	
+	/**
+	 * Keyword or keywords desired by the search client
+	 */
 	public static final String PARAM_SEARCH_TERMS = "{searchTerms}";
 
 	/**
@@ -138,7 +146,7 @@ public enum TemplateParameter {
 	 */
 	public static TemplateParameter fromString(String value) throws InvalidParameterException{
 		if (value != null) {
-			String type = value.trim().replaceAll("?", "");
+			String type = value.trim().replace("?", "");
 			if (type.equals(PARAM_SEARCH_TERMS)) {
 				return SEARCH_TERM;
 			} else if (type.equals(PARAM_COUNT)) {
@@ -173,7 +181,7 @@ public enum TemplateParameter {
 				return GEO_GEOMETRY;
 			}
 		}
-		throw new InvalidParameterException("Invalid value: " + value);
+		return null;
 	}
 	
 	/**
@@ -216,6 +224,8 @@ public enum TemplateParameter {
 				return PARAM_GEO_BOX;
 			case GEO_GEOMETRY:
 				return PARAM_GEO_GEOMETRY;
+			default:
+				return null;
 			}
 		}
 		return null;

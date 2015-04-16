@@ -21,8 +21,6 @@ import org.w3c.dom.Node;
  */
 public class Image {
 	
-	public static final String ELEMENT_NAME = "Image";
-	
 	public static final String ATTR_TYPE = "type";
 
 	public static final String ATTR_WIDTH = "width";
@@ -106,7 +104,7 @@ public class Image {
 	 */
 	@Override
 	public String toString() {
-		StringBuilder tag = new StringBuilder("<" + ELEMENT_NAME);
+		StringBuilder tag = new StringBuilder("<" + TAG_NAME);
 		if (this.height > 0) {
 			tag.append(" " + ATTR_HEIGHT + "=\"" + this.height + "\"");
 		}
@@ -116,7 +114,7 @@ public class Image {
 		if (this.type!= null && !this.type.equals("")) {
 			tag.append(" " + ATTR_TYPE + "=\"" + this.type + "\"");
 		}
-		tag.append(">" + this.value + "</" + ELEMENT_NAME + ">");
+		tag.append(">" + this.value + "</" + TAG_NAME + ">");
 		return tag.toString();
 	}
 }

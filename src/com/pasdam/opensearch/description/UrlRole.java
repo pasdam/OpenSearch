@@ -27,8 +27,8 @@ public enum UrlRole {
 	 * @param role - the int role
 	 * @return a string representing the role
 	 */
-	public static String toString(UrlRole role){
-		switch (role) {
+	public String toString(){
+		switch (this) {
 		case RESULTS:
 			return ROLE_RESULTS;
 		case SUGGESTIONS:
@@ -38,7 +38,7 @@ public enum UrlRole {
 		case COLLECTION:
 			return ROLE_COLLECTION;
 		default:
-			return null;
+			return "";
 		}
 	}
 	

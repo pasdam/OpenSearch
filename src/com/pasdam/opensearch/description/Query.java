@@ -12,8 +12,6 @@ import org.w3c.dom.Node;
  */
 public class Query {
 	
-	public static final String ELEMENT_NAME = "Query";
-	
 	public static final String ATTR_OUTPUT_ENCODING = "outputEncoding";
 
 	public static final String ATTR_INPUT_ENCODING = "inputEncoding";
@@ -194,7 +192,7 @@ public class Query {
 	@Override
 	public String toString() {
 		StringBuilder tag = new StringBuilder();
-		tag.append("<" + ELEMENT_NAME + " role=\"" + role + "\"");
+		tag.append("<" + TAG_NAME + " role=\"" + role + "\"");
 		if (this.title != null) {
 			tag.append(" ");tag.append(ATTR_TITLE);tag.append("=\"");tag.append(this.title);tag.append("\"");
 		}
